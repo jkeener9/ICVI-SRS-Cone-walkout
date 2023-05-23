@@ -12,14 +12,12 @@ import pylab
 from scipy.interpolate import UnivariateSpline
 from matplotlib.backends.backend_pdf import PdfPages
 
-d = "\\\\ceinvfs03s.corp.centura.org\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230425_4mm\\"  #Enter Directory where dicom image files are saved
-#d = "\\\\172.29.223.162\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230111_4mm\\"  #Enter Directory where dicom image files are saved
-
+d = "\\\\ceinvfs03s.corp.centura.org\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230118_all\\"  #Enter Directory where dicom image files are saved
 pp = PdfPages(d + "ConeAnalysisResults.pdf")
-ConeDiamm=4  #Enter Cone Diameter in mm
+ConeDiamm=[4,5,7.5,10,12.5,15,17.5]  #Enter Cone Diameters in mm
 BeamCenters=[] 
-
-for k in glob.glob(d + '*.dcm'):
+kk=0
+for k in glob.glob(d + '*.dcm'):    #only tested when file names are sequential, ie 04mm.dcm, 05mm.dcm, ...10mm.dcm
     dcmFiles = []
     dcmFiles=dicom.read_file(k)
 
@@ -45,14 +43,14 @@ for k in glob.glob(d + '*.dcm'):
     pixelHeight = dcmFiles.ImagePlanePixelSpacing[0]
 
     SID=dcmFiles.RTImageSID
-    ConeDiapix=ConeDiamm/pixelWidth*(SID/1000)   #for now assuming pixelWidth=PixelHeight
+    ConeDiapix=ConeDiamm[kk]/pixelWidth*(SID/1000)   #for now assuming pixelWidth=PixelHeight
 
     CollAng = str(int(round(dcmFiles.BeamLimitingDeviceAngle)))
 
-    left=int(halfWidth-round(ConeDiapix+0))   #replace +0 with number of pixels desired for enlarged ROI - helpful when image not centered on panel
-    right=int(halfWidth+round(ConeDiapix+0))
-    top=int(halfHeight-round(ConeDiapix+0))
-    bottom=int(halfHeight+round(ConeDiapix+0))
+    left=int(halfWidth-round(ConeDiapix+5))   #added some buffer to ROI (n pixels)
+    right=int(halfWidth+round(ConeDiapix+5))
+    top=int(halfHeight-round(ConeDiapix+5))
+    bottom=int(halfHeight+round(ConeDiapix+5))
 
     dcmFilespixNormROI=dcmFilespixNorm[top:bottom, left:right]
     plt.imshow(dcmFilespixNormROI)
@@ -66,8 +64,8 @@ for k in glob.glob(d + '*.dcm'):
     y=np.linspace(top,top+HeightROI-1,HeightROI)
 
     maxfwhmy=0  #loop through columns
-    
-    for i in range(maxpixloc[1]-round(0.4*ConeDiapix),maxpixloc[1]+round(0.4*ConeDiapix)):   #factor of .4 is arbitrary value that was tweaked to provide desired results
+    #for i in range(np.asscalar(maxpixloc[1])-round(0.4*ConeDiapix),np.asscalar(maxpixloc[1])+round(0.4*ConeDiapix)):
+    for i in range(maxpixloc[1]-round(0.4*ConeDiapix),maxpixloc[1]+round(0.4*ConeDiapix)):
         splinefit=UnivariateSpline(y,dcmFilespixNormROI[:,i]-np.max(dcmFilespixNormROI[:,i])/2,s=0)  #see sbcrowe.net/python-exercise-field-size-calculator/
         if len(splinefit.roots())==2:  ## have had code crash sometimes due to root not being found correctly
             r1,r2=splinefit.roots()
@@ -84,7 +82,7 @@ for k in glob.glob(d + '*.dcm'):
     plt.axvspan(fwhmr1y,fwhmr2y,facecolor='b',alpha=0.4)
 
     maxfwhmx=0   #loop through rows
-    
+    #for j in range(np.asscalar(maxpixloc[0])-round(0.4*ConeDiapix),np.asscalar(maxpixloc[0])+round(0.4*ConeDiapix)):
     for j in range(maxpixloc[0]-round(0.4*ConeDiapix),maxpixloc[0]+round(0.4*ConeDiapix)):
         splinefit=UnivariateSpline(x,dcmFilespixNormROI[j,:]-np.max(dcmFilespixNormROI[j,:])/2,s=0)  
         if len(splinefit.roots())==2:
@@ -100,7 +98,7 @@ for k in glob.glob(d + '*.dcm'):
     pylab.plot(x,dcmFilespixNormROI[rowfwhm,:], label="crossplane") 
     plt.axvspan(fwhmr1x,fwhmr2x,facecolor='r',alpha=0.4)
 
-    plt.title(str(ConeDiamm) + "mm Cone, COLL " + CollAng + "Deg Profiles")
+    plt.title(str(ConeDiamm[kk]) + "mm Cone, COLL " + CollAng + "Deg Profiles")
     plt.xlabel("                                                                                     pixels")
     plt.legend()
     plt.grid()
@@ -118,13 +116,14 @@ for k in glob.glob(d + '*.dcm'):
     plt.figure()
     plt.imshow(dcmFilespixNormROI, cmap='Greys', extent=(left,right,bottom,top))
     plt.scatter(fwhmxloc,fwhmyloc, color='r', marker='+', s=500)
-    plt.title(str(ConeDiamm) + "mm Cone, COLL " + CollAng + "Deg")
+    plt.title(str(ConeDiamm[kk]) + "mm Cone, COLL " + CollAng + "Deg")
     #plt.show()
     pp.savefig()
     plt.close()
 
     BeamCenter=[fwhmxloc,fwhmyloc,int(round(dcmFiles.BeamLimitingDeviceAngle))]
     BeamCenters.append(BeamCenter)
+    kk=kk+1
         
 npBeamCenters=np.array(BeamCenters)
 #plt.figure()

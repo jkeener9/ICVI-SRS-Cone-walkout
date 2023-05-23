@@ -1,5 +1,6 @@
 """
 Created on Oct 2017
+Revised 3-17-2022 for ZapX and QASC
 
 @author: justin
 """
@@ -12,14 +13,15 @@ import pylab
 from scipy.interpolate import UnivariateSpline
 from matplotlib.backends.backend_pdf import PdfPages
 
-d = "\\\\ceinvfs03s.corp.centura.org\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230425_4mm\\"  #Enter Directory where dicom image files are saved
-#d = "\\\\172.29.223.162\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230111_4mm\\"  #Enter Directory where dicom image files are saved
-
+d = "\\\\ceinvfs03s.corp.centura.org\\shared\\Centura Physics\\Physics Team\\Justin\\__JustinPythonCode__\\20230523_Zap_StereoChecker\\"  #Enter Directory where dicom image files are saved
 pp = PdfPages(d + "ConeAnalysisResults.pdf")
-ConeDiamm=4  #Enter Cone Diameter in mm
+#ConeDiamm=[4,5]
+ConeDiamm=[4,5,7.5,10,12.5,15,20,25]  #Enter Cone Diameters in mm
 BeamCenters=[] 
+kk=0
+DistanceToIso=450
 
-for k in glob.glob(d + '*.dcm'):
+for k in glob.glob(d + '*.dcm'):    #only tested when file names are sequential, ie 04mm.dcm, 05mm.dcm, ...10mm.dcm
     dcmFiles = []
     dcmFiles=dicom.read_file(k)
 
@@ -29,7 +31,7 @@ for k in glob.glob(d + '*.dcm'):
     #invert due to acquistion in QA mode 
     orig_array=dcmFilespix
     #dcmFilespix=65535 - orig_array  #apparently does the same function as invert
-    dcmFilespix=np.invert(orig_array)  #comment out for images taken in service mode
+    #dcmFilespix=np.invert(orig_array)
     
     # Normalize the image to the max value in the image. 
     maxpix=np.max(dcmFilespix)
@@ -41,18 +43,17 @@ for k in glob.glob(d + '*.dcm'):
     Height=dcmFilespix.shape[0]
     halfWidth=int(Width/2)
     halfHeight=int(Height/2)
-    pixelWidth = dcmFiles.ImagePlanePixelSpacing[1]
-    pixelHeight = dcmFiles.ImagePlanePixelSpacing[0]
+    pixelWidth=0.2 #mm
+    pixelHeight=0.2 #mm
 
-    SID=dcmFiles.RTImageSID
-    ConeDiapix=ConeDiamm/pixelWidth*(SID/1000)   #for now assuming pixelWidth=PixelHeight
+    SID=500 #estimated placement of QASC in Zap
+    ConeDiapix=ConeDiamm[kk]/pixelWidth*(SID/DistanceToIso)   #for now assuming pixelWidth=PixelHeight
 
-    CollAng = str(int(round(dcmFiles.BeamLimitingDeviceAngle)))
-
-    left=int(halfWidth-round(ConeDiapix+0))   #replace +0 with number of pixels desired for enlarged ROI - helpful when image not centered on panel
-    right=int(halfWidth+round(ConeDiapix+0))
-    top=int(halfHeight-round(ConeDiapix+0))
-    bottom=int(halfHeight+round(ConeDiapix+0))
+    bufferpix=10
+    left=int(halfWidth-round(ConeDiapix+bufferpix))   #added some buffer to ROI (n pixels)
+    right=int(halfWidth+round(ConeDiapix+bufferpix))
+    top=int(halfHeight-round(ConeDiapix+bufferpix))
+    bottom=int(halfHeight+round(ConeDiapix+bufferpix))
 
     dcmFilespixNormROI=dcmFilespixNorm[top:bottom, left:right]
     plt.imshow(dcmFilespixNormROI)
@@ -66,8 +67,8 @@ for k in glob.glob(d + '*.dcm'):
     y=np.linspace(top,top+HeightROI-1,HeightROI)
 
     maxfwhmy=0  #loop through columns
-    
-    for i in range(maxpixloc[1]-round(0.4*ConeDiapix),maxpixloc[1]+round(0.4*ConeDiapix)):   #factor of .4 is arbitrary value that was tweaked to provide desired results
+    #for i in range(np.asscalar(maxpixloc[1])-round(0.4*ConeDiapix),np.asscalar(maxpixloc[1])+round(0.4*ConeDiapix)):
+    for i in range(maxpixloc[1]-round(0.2*ConeDiapix),maxpixloc[1]+round(0.2*ConeDiapix)):
         splinefit=UnivariateSpline(y,dcmFilespixNormROI[:,i]-np.max(dcmFilespixNormROI[:,i])/2,s=0)  #see sbcrowe.net/python-exercise-field-size-calculator/
         if len(splinefit.roots())==2:  ## have had code crash sometimes due to root not being found correctly
             r1,r2=splinefit.roots()
@@ -84,8 +85,8 @@ for k in glob.glob(d + '*.dcm'):
     plt.axvspan(fwhmr1y,fwhmr2y,facecolor='b',alpha=0.4)
 
     maxfwhmx=0   #loop through rows
-    
-    for j in range(maxpixloc[0]-round(0.4*ConeDiapix),maxpixloc[0]+round(0.4*ConeDiapix)):
+    #for j in range(np.asscalar(maxpixloc[0])-round(0.4*ConeDiapix),np.asscalar(maxpixloc[0])+round(0.4*ConeDiapix)):
+    for j in range(maxpixloc[0]-round(0.2*ConeDiapix),maxpixloc[0]+round(0.2*ConeDiapix)):
         splinefit=UnivariateSpline(x,dcmFilespixNormROI[j,:]-np.max(dcmFilespixNormROI[j,:])/2,s=0)  
         if len(splinefit.roots())==2:
             r1,r2=splinefit.roots()
@@ -100,14 +101,14 @@ for k in glob.glob(d + '*.dcm'):
     pylab.plot(x,dcmFilespixNormROI[rowfwhm,:], label="crossplane") 
     plt.axvspan(fwhmr1x,fwhmr2x,facecolor='r',alpha=0.4)
 
-    plt.title(str(ConeDiamm) + "mm Cone, COLL " + CollAng + "Deg Profiles")
+    plt.title(str(ConeDiamm[kk]) + "mm Cone Profiles")
     plt.xlabel("                                                                                     pixels")
     plt.legend()
     plt.grid()
 
-    FWHMcross=(abs(fwhmr1x-fwhmr2x))*pixelWidth*1000/SID
+    FWHMcross=(abs(fwhmr1x-fwhmr2x))*pixelWidth*DistanceToIso/SID
     #print("FWHM crossplane projected to iso = " + str(FWHMcross) +"mm")
-    FWHMin=(abs(fwhmr1y-fwhmr2y))*pixelHeight*1000/SID
+    FWHMin=(abs(fwhmr1y-fwhmr2y))*pixelHeight*DistanceToIso/SID
     #print("FWHM inplane projected to iso = " + str(FWHMin) +"mm")
     captiontext=("FWHM crossplane projected to iso = " + str(FWHMcross) +"mm" + "\n" + "FWHM inplane projected to iso = " + str(FWHMin) +"mm")
     plt.figtext(0,0,captiontext)
@@ -118,13 +119,14 @@ for k in glob.glob(d + '*.dcm'):
     plt.figure()
     plt.imshow(dcmFilespixNormROI, cmap='Greys', extent=(left,right,bottom,top))
     plt.scatter(fwhmxloc,fwhmyloc, color='r', marker='+', s=500)
-    plt.title(str(ConeDiamm) + "mm Cone, COLL " + CollAng + "Deg")
+    plt.title(str(ConeDiamm[kk]) + "mm Cone")
     #plt.show()
     pp.savefig()
     plt.close()
 
-    BeamCenter=[fwhmxloc,fwhmyloc,int(round(dcmFiles.BeamLimitingDeviceAngle))]
+    BeamCenter=[fwhmxloc,fwhmyloc]
     BeamCenters.append(BeamCenter)
+    kk=kk+1
         
 npBeamCenters=np.array(BeamCenters)
 #plt.figure()
@@ -135,10 +137,9 @@ npBeamCenters=np.array(BeamCenters)
 averagex=np.mean(npBeamCenters[:,0])
 averagey=np.mean(npBeamCenters[:,1])
 
-xdist=np.vstack(npBeamCenters[:,0]-averagex)*pixelWidth*(1000/SID)
-ydist=np.vstack(npBeamCenters[:,1]-averagey)*pixelWidth*(1000/SID)
-CollAngles=np.vstack(npBeamCenters[:,2])
-CenterDistfromAvgmm=np.hstack((xdist,ydist,CollAngles))   #still assuming pixel width=height
+xdist=np.vstack(npBeamCenters[:,0]-averagex)*pixelWidth*(DistanceToIso/SID)
+ydist=np.vstack(npBeamCenters[:,1]-averagey)*pixelWidth*(DistanceToIso/SID)
+CenterDistfromAvgmm=np.hstack((xdist,ydist))   #still assuming pixel width=height
  
 DistancefromAvg=np.sqrt(np.square(CenterDistfromAvgmm[:,0])+np.square(CenterDistfromAvgmm[:,1]))
 DistancefromAvg=np.vstack(DistancefromAvg)
@@ -157,5 +158,5 @@ plt.close()
         
 pp.close()
 
-OutputTable=np.hstack((CollAngles,DistancefromAvg))
-print("Collimator Angle & Distance from Center" + "\n" + str(OutputTable))
+OutputTable=np.hstack((DistancefromAvg))
+print("Distance from Center" + "\n" + str(OutputTable))
